@@ -1,123 +1,349 @@
-// use crate::lexer::{C1Lexer, C1Token};
-// use crate::ParseResult;
-// use std::ops::{Deref, DerefMut};
-//
-// pub struct C1Parser<'a>(C1Lexer<'a>);
-// // Implement Deref and DerefMut to enable the direct use of the lexer's methods
-// impl<'a> Deref for C1Parser<'a> {
-//     type Target = C1Lexer<'a>;
-//
-//     fn deref(&self) -> &Self::Target {
-//         &self.0
-//     }
-// }
-//
-// impl<'a> DerefMut for C1Parser<'a> {
-//     fn deref_mut(&mut self) -> &mut Self::Target {
-//         &mut self.0
-//     }
-// }
-//
-// impl<'a> C1Parser<'a> {
-//     pub fn parse(text: &str) -> ParseResult {
-//         let mut parser = Self::initialize_parser(text);
-//         parser.program()
-//     }
-//
-//     fn initialize_parser(text: &str) -> C1Parser {
-//         C1Parser(C1Lexer::new(text))
-//     }
-//
-//     /// program ::= ( functiondefinition )* <EOF>
-//     fn program(&mut self) -> ParseResult {
-//         todo!();
-//     }
-//
-//     // TODO: implement remaining grammar
-//
-//     /// Check whether the current token is equal to the given token. If yes, consume it, otherwise
-//     /// return an error with the given error message
-//     fn check_and_eat_token(&mut self, token: &C1Token, error_message: &str) -> ParseResult {
-//         if self.current_matches(token) {
-//             self.eat();
-//             Ok(())
-//         } else {
-//             Err(String::from(error_message))
-//         }
-//     }
-//
-//     /// For each token in the given slice, check whether the token is equal to the current token,
-//     /// consume the current token, and check the next token in the slice against the next token
-//     /// provided by the lexer.
-//     fn check_and_eat_tokens(&mut self, token: &[C1Token], error_message: &str) -> ParseResult {
-//         match token
-//             .iter()
-//             .map(|t| self.check_and_eat_token(t, error_message))
-//             .filter(ParseResult::is_err)
-//             .last()
-//         {
-//             None => Ok(()),
-//             Some(err) => err,
-//         }
-//     }
-//
-//     /// Check whether the given token matches the current token
-//     fn current_matches(&self, token: &C1Token) -> bool {
-//         match &self.current_token() {
-//             None => false,
-//             Some(current) => current == token,
-//         }
-//     }
-//
-//     /// Check whether the given token matches the next token
-//     fn next_matches(&self, token: &C1Token) -> bool {
-//         match &self.peek_token() {
-//             None => false,
-//             Some(next) => next == token,
-//         }
-//     }
-//
-//     /// Check whether any of the tokens matches the current token.
-//     fn any_match_current(&self, token: &[C1Token]) -> bool {
-//         token.iter().any(|t| self.current_matches(t))
-//     }
-//
-//     /// Check whether any of the tokens matches the current token, then consume it
-//     fn any_match_and_eat(&mut self, token: &[C1Token], error_message: &String) -> ParseResult {
-//         if token
-//             .iter()
-//             .any(|t| self.check_and_eat_token(t, "").is_ok())
-//         {
-//             Ok(())
-//         } else {
-//             Err(String::from(error_message))
-//         }
-//     }
-//
-//     fn error_message_current(&self, reason: &'static str) -> String {
-//         match self.current_token() {
-//             None => format!("{}. Reached EOF", reason),
-//             Some(_) => format!(
-//                 "{} at line {:?} with text: '{}'",
-//                 reason,
-//                 self.current_line_number().unwrap(),
-//                 self.current_text().unwrap()
-//             ),
-//         }
-//     }
-//
-//     fn error_message_peek(&mut self, reason: &'static str) -> String {
-//         match self.peek_token() {
-//             None => format!("{}. Reached EOF", reason),
-//             Some(_) => format!(
-//                 "{} at line {:?} with text: '{}'",
-//                 reason,
-//                 self.peek_line_number().unwrap(),
-//                 self.peek_text().unwrap()
-//             ),
-//         }
-//     }
-// }
+ use crate::lexer::{C1Lexer, C1Token};
+ use crate::ParseResult;
+ use std::ops::{Deref, DerefMut};
+ 
+ pub struct C1Parser<'a>(C1Lexer<'a>); 
+ // Implement Deref and DerefMut to enable the direct use of the lexer's methods
+ impl<'a> Deref for C1Parser<'a> {
+     type Target = C1Lexer<'a>;
+
+     fn deref(&self) -> &Self::Target {
+         &self.0
+     }
+ }
+
+ impl<'a> DerefMut for C1Parser<'a> {
+     fn deref_mut(&mut self) -> &mut Self::Target {
+         &mut self.0
+     }
+ }
+
+impl<'a> C1Parser<'a> {
+    pub fn parse(text: &str) -> ParseResult {
+        let mut parser = Self::initialize_parser(text);
+        parser.program()
+    }
+
+    fn initialize_parser(text: &str) -> C1Parser {
+        C1Parser(C1Lexer::new(text))
+    }
+
+    // program ::= ( functiondefinition )* <EOF>
+    fn program(&mut self) -> ParseResult {
+        loop {
+            match &self.current_token() {
+                None => break Ok(()),
+                Some(_) => self.functiondefinition()?
+            }
+        }
+        // TODO
+    }
+
+    fn functiondefinition(&mut self) -> ParseResult {
+        self.r#type()?;
+        self.check_and_eat_token(&C1Token::Identifier, &self.error_message_current("error"))?; 
+        self.check_and_eat_token(&C1Token::LeftParenthesis, &self.error_message_current("error"))?;
+        self.check_and_eat_token(&C1Token::RightParenthesis, &self.error_message_current("error"))?;
+        self.check_and_eat_token(&C1Token::LeftBrace, &self.error_message_current("error"))?; 
+        self.statementlist()?;
+        self.check_and_eat_token(&C1Token::RightBrace, &self.error_message_current("error"))
+        // TODO
+    }
+
+    fn function_call(&mut self) -> ParseResult {
+        self.check_and_eat_token(&C1Token::Identifier, &self.error_message_current("error"))?;
+        self.check_and_eat_token(&C1Token::LeftParenthesis, &self.error_message_current("error"))?;
+        self.check_and_eat_token(&C1Token::RightParenthesis, &self.error_message_current("error"))
+        // TODO
+    }
+
+    fn statementlist(&mut self) -> ParseResult {
+        while self.current_matches(&C1Token::LeftBrace) 
+                || self.current_matches(&C1Token::KwIf) 
+                || self.current_matches(&C1Token::KwReturn) 
+                || self.current_matches(&C1Token::KwPrintf)
+                || self.current_matches(&C1Token::Identifier) {
+            self.block()?;           
+        }
+    Ok(())
+    //  TODO
+    }
+    
+
+    fn block(&mut self) -> ParseResult {
+        if self.current_matches(&C1Token::LeftBrace) {
+            self.check_and_eat_token(&C1Token::LeftBrace, &self.error_message_current("error"))?; 
+            self.statementlist()?;
+            self.check_and_eat_token(&C1Token::RightBrace, &self.error_message_current("error"))
+        }
+        else {
+            self.statement()
+        }    
+    //  TODO
+    }
+
+    fn statement(&mut self) -> ParseResult {
+        match &self.current_token().unwrap() {
+            &C1Token::KwIf => {
+                self.ifstatement()?;
+                self.check_and_eat_token(&C1Token::Semicolon, &self.error_message_current("error"))
+            },    
+            &C1Token::KwReturn => {
+                self.returnstatement()?;
+                self.check_and_eat_token(&C1Token::Semicolon, &self.error_message_current("error"))
+            },
+            &C1Token::KwPrintf => {
+                self.printf()?;
+                self.check_and_eat_token(&C1Token::Semicolon, &self.error_message_current("error"))
+            },
+            &C1Token::Identifier => if self.next_matches(&C1Token::Assign) {
+                    self.statassignment()?;
+                    self.check_and_eat_token(&C1Token::Semicolon, &self.error_message_current("error"))
+                }
+                else {
+                    self.function_call()?;
+                    self.check_and_eat_token(&C1Token::Semicolon, &self.error_message_current("error"))
+                },
+            _ => Err(self.error_message_current("error"))
+        }
+        //  TODO
+    }
+
+    fn ifstatement(&mut self) -> ParseResult {
+        self.check_and_eat_token(&C1Token::KwIf, &self.error_message_current("error"))?;
+        self.check_and_eat_token(&C1Token::LeftParenthesis, &self.error_message_current("error"))?;
+        self.assignment()?;
+        self.check_and_eat_token(&C1Token::RightParenthesis, &self.error_message_current("error"))?;
+        self.block()
+        //  TODO
+    }
+
+    fn returnstatement(&mut self) -> ParseResult {
+        if self.next_matches(&C1Token::Identifier) {
+            self.check_and_eat_token(&C1Token::KwReturn, &self.error_message_current("error"))?;
+            self.assignment()
+        }
+        else {
+            self.check_and_eat_token(&C1Token::KwReturn, &self.error_message_current("error"))
+        }
+        //  TODO
+    }
+
+    fn printf(&mut self) -> ParseResult {
+        self.check_and_eat_token(&C1Token::KwPrintf, &self.error_message_current("error"))?;
+        self.check_and_eat_token(&C1Token::LeftParenthesis, &self.error_message_current("error"))?;
+        self.assignment()?;
+        self.check_and_eat_token(&C1Token::RightParenthesis, &self.error_message_current("error"))
+        //  TODO ; 
+    }
+
+    fn r#type(&mut self) -> ParseResult {
+        match &self.current_token().unwrap() {
+            &C1Token::KwBoolean => self.check_and_eat_token(&C1Token::KwBoolean, &self.error_message_current("error"))?,
+            &C1Token::KwFloat => self.check_and_eat_token(&C1Token::KwFloat, &self.error_message_current("error"))?,
+            &C1Token::KwInt => self.check_and_eat_token(&C1Token::KwInt, &self.error_message_current("error"))?,
+            &C1Token::KwVoid => self.check_and_eat_token(&C1Token::KwVoid, &self.error_message_current("error"))?,
+            _ => Err(&self.error_message_current("error"))?,
+        }
+        Ok(())
+        //  TODO
+    }
+
+    fn statassignment(&mut self) -> ParseResult {
+        self.check_and_eat_token(&C1Token::Identifier, &self.error_message_current("error"))?;
+        self.check_and_eat_token(&C1Token::Assign, &self.error_message_current("error"))?;
+        self.assignment()
+        //  TODO
+    }
+
+    fn assignment(&mut self) -> ParseResult {
+        if self.current_matches(&C1Token::Identifier) && self.next_matches(&C1Token::Assign) {
+            self.check_and_eat_token(&C1Token::Identifier, &self.error_message_current("error"))?;
+            self.check_and_eat_token(&C1Token::Assign, &self.error_message_current("error"))?;
+            self.assignment()
+        }
+        else {
+            self.expr()
+        }
+        //  TODO
+    }
+
+    fn expr(&mut self) -> ParseResult {
+        self.simpexpr()?;
+        if self.current_matches(&C1Token::Equal) 
+            || self.current_matches(&C1Token::NotEqual) 
+            || self.current_matches(&C1Token::LessEqual) 
+            || self.current_matches(&C1Token::GreaterEqual) 
+            || self.current_matches(&C1Token::Greater) 
+            || self.current_matches(&C1Token::Less) {
+            match &self.current_token().unwrap() {
+                &C1Token::Equal => self.check_and_eat_token(&C1Token::Equal, &self.error_message_current("error"))?,
+                &C1Token::NotEqual => self.check_and_eat_token(&C1Token::NotEqual, &self.error_message_current("error"))?,
+                &C1Token::LessEqual => self.check_and_eat_token(&C1Token::LessEqual, &self.error_message_current("error"))?,
+                &C1Token::GreaterEqual => self.check_and_eat_token(&C1Token::GreaterEqual, &self.error_message_current("error"))?,
+                &C1Token::Greater => self.check_and_eat_token(&C1Token::Greater, &self.error_message_current("error"))?,
+                &C1Token::Less => self.check_and_eat_token(&C1Token::Less, &self.error_message_current("error"))?,
+                _ => Err(&self.error_message_current("error"))?,
+            };
+            self.simpexpr()
+        }
+        else {
+           Ok(()) 
+        }
+        //  TODO
+    }
+
+    fn simpexpr(&mut self) -> ParseResult {
+        if self.current_matches(&C1Token::Minus) {
+            self.check_and_eat_token(&C1Token::Minus, &self.error_message_current("error"))?;
+        }
+        self.term()?;
+        loop {
+            if self.current_matches(&C1Token::Plus) || self.current_matches(&C1Token::Minus) || self.current_matches(&C1Token::Or) {
+                match &self.current_token().unwrap() {
+                    &C1Token::Plus => self.check_and_eat_token(&C1Token::Plus, &self.error_message_current("error"))?,
+                    &C1Token::Minus => self.check_and_eat_token(&C1Token::Minus, &self.error_message_current("error"))?,
+                    &C1Token::Or => self.check_and_eat_token(&C1Token::Or, &self.error_message_current("error"))?,
+                    _ => Err(&self.error_message_current("error"))?,
+                }
+            }
+            else {
+                break Ok(())
+            }
+        }
+        //  TODO
+    }
+
+    fn term(&mut self) -> ParseResult {
+        self.factor()?;
+        loop {
+            if self.current_matches(&C1Token::Asterisk) || self.current_matches(&C1Token::Slash) || self.current_matches(&C1Token::And) {
+                match &self.current_token().unwrap() {                                             
+                    &C1Token::Asterisk => self.check_and_eat_token(&C1Token::Asterisk, &self.error_message_current("error"))?,
+                    &C1Token::Slash => self.check_and_eat_token(&C1Token::Slash, &self.error_message_current("error"))?,
+                    &C1Token::And => self.check_and_eat_token(&C1Token::And, &self.error_message_current("error"))?,
+                    _ => Err(&self.error_message_current("error"))?,
+                };
+                self.factor()?;
+            }
+            else {
+                break Ok(())
+            }
+        }
+        //  TODO
+    }
+
+    fn factor(&mut self) -> ParseResult {
+        match &self.current_token().unwrap() {
+            &C1Token::ConstInt => self.check_and_eat_token(&C1Token::ConstInt, &self.error_message_current("error")),
+            &C1Token::ConstFloat => self.check_and_eat_token(&C1Token::ConstFloat, &self.error_message_current("error")),
+            &C1Token::ConstBoolean => self.check_and_eat_token(&C1Token::ConstBoolean, &self.error_message_current("error")),
+            &C1Token::Identifier =>  { 
+                if self.next_matches(&C1Token::LeftParenthesis) {
+                    self.function_call()
+                }
+                else {
+                    self.check_and_eat_token(&C1Token::Identifier, &self.error_message_current("error"))
+                }    
+            },
+            &C1Token::LeftParenthesis => {
+                self.check_and_eat_token(&C1Token::LeftParenthesis, &self.error_message_current("error"))?;
+                self.assignment()?;
+                self.check_and_eat_token(&C1Token::RightParenthesis, &self.error_message_current("error"))
+            },
+            _ => Err(self.error_message_current("error"))
+        }    
+        //  TODO
+    }
+
+    // uses eat from lexer
+    pub fn eat(&mut self) {
+        self.deref_mut().eat();
+    }
+
+    /// Check whether the current token is equal to the given token. If yes, consume it, otherwise
+    /// return an error with the given error message
+    fn check_and_eat_token(&mut self, token: &C1Token, error_message: &str) -> ParseResult {
+        if self.current_matches(token) {
+            self.eat();
+            Ok(())
+        } else {
+            Err(String::from(error_message))
+        }
+    }
+
+//    /// For each token in the given slice, check whether the token is equal to the current token,
+//    /// consume the current token, and check the next token in the slice against the next token
+//    /// provided by the lexer.
+//    fn check_and_eat_tokens(&mut self, token: &[C1Token], error_message: &str) -> ParseResult {
+//        match token
+//            .iter()
+//            .map(|t| self.check_and_eat_token(t, error_message))
+//            .filter(ParseResult::is_err)
+//            .last()
+//        {
+//            None => Ok(()),
+//            Some(err) => err,
+//        }
+//    }
+
+    /// Check whether the given token matches the current token
+    fn current_matches(&self, token: &C1Token) -> bool {
+        match &self.current_token() {
+            None => false,
+            Some(current) => current == token,
+        }
+    }
+
+    /// Check whether the given token matches the next token
+    fn next_matches(&self, token: &C1Token) -> bool {
+        match &self.peek_token() {
+            None => false,
+            Some(next) => next == token,
+        }
+    }
+
+    /// Check whether any of the tokens matches the current token.
+//    fn any_match_current(&self, token: &[C1Token]) -> bool {
+//        token.iter().any(|t| self.current_matches(t))
+//    }
+
+    /// Check whether any of the tokens matches the current token, then consume it
+//    fn any_match_and_eat(&mut self, token: &[C1Token], error_message: &String) -> ParseResult {
+//        if token
+//            .iter()
+//            .any(|t| self.check_and_eat_token(t, "").is_ok())
+//        {
+//            Ok(())
+//        } else {
+//            Err(String::from(error_message))
+//        }
+//    }
+
+    fn error_message_current(&self, reason: &'static str) -> String {
+        match self.current_token() {
+            None => format!("{}. Reached EOF", reason),
+            Some(_) => format!(
+                "{} at line {:?} with text: '{}'",
+                reason,
+                self.current_line_number().unwrap(),
+                self.current_text().unwrap()
+            ),
+        }
+    }
+
+    fn error_message_peek(&mut self, reason: &'static str) -> String {
+        match self.peek_token() {
+            None => format!("{}. Reached EOF", reason),
+            Some(_) => format!(
+                "{} at line {:?} with text: '{}'",
+                reason,
+                self.peek_line_number().unwrap(),
+                self.peek_text().unwrap()
+            ),
+        }
+    }
+}    
 //
 // #[cfg(test)]
 // mod tests {
